@@ -120,7 +120,7 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 
 	int tcp_header_length = tcp_hdr.th_off << 2;
 
-	printf("TCP PORT PASS\n");
+	//printf("TCP PORT PASS\n");
 
 	// http 처리
 	int tcp_segment_offset = ip_length + tcp_header_length;
@@ -134,18 +134,23 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	const unsigned char* HTTP_METHOD = "HTTP";
 	for(i = tcp_segment_offset; i < ret - strlen(HTTP_METHOD); i++) {
 		if(strncmp(&data_[i], HTTP_METHOD, strlen(HTTP_METHOD)) == 0) {
-			printf("HTTP PASS\n");	
+			//printf("HTTP PASS\n");	
 			break;
 		}
 	}
 	if(i == ret - strlen(HTTP_METHOD)) {
-		for(int j = tcp_segment_offset ; j < ret; j++) {
-			printf("%c", data_[j]);
-		}
+		//for(int j = tcp_segment_offset ; j < ret; j++) {
+		//	printf("%c", data_[j]);
+		//}
 		return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
 	}
-	for(; i < ret-strlen(target); i++) {
-		if(strncmp(&data_[i], target, strlen(target)) == 0) {
+	char* target_ = (char*)malloc(strlen(target)+2);
+	strncpy(target_, target, strlen(target));
+	char* additional = "\r\n";
+	strncpy(target_ + strlen(target), additional, 2);
+	//printf("%s", target_);
+	for(; i < ret-strlen(target_); i++) {
+		if(strncmp(&data_[i], target_, strlen(target_)) == 0) {
 			printf("DROP\n");
 			return nfq_set_verdict(qh, id, NF_DROP, 0, NULL);
 		}
