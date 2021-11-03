@@ -92,70 +92,64 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	u_int32_t id = get_id(nfa);
 	int ret = nfq_get_payload(nfa, &data_);
 
-	// memcpy하고 필요한것만 ntoh 해주면 될듯
 	struct libnet_ipv4_hdr ip_hdr;
 	struct libnet_tcp_hdr tcp_hdr;
-	unsigned char* remainer;
-	// ret = len
 
-	// printf("In cb\n");
 	// ip header 처리
 	memcpy(&ip_hdr, data_, sizeof(struct libnet_ipv4_hdr));
 	
-	// printf("%d\n", ip_hdr.ip_v);
 	// version 확인
 	if(ip_hdr.ip_v != IPv4) return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
 	// protocol 확인
 	if(ip_hdr.ip_p != TCP) return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
 
-	// length 확인
+	// ip_header_length 계산
 	int ip_length = ip_hdr.ip_hl << 2;
 
-	// printf("IP HEADER PASS\n");
 	// tcp header 처리
 	memcpy(&tcp_hdr, &data_[ip_length], sizeof(struct libnet_tcp_hdr));
 
 	// 포트 확인
 	if(ntohs(tcp_hdr.th_dport) != 80 && ntohs(tcp_hdr.th_sport) != 80) return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
 
+	// tcp_header_length 계산
 	int tcp_header_length = tcp_hdr.th_off << 2;
 
-	//printf("TCP PORT PASS\n");
-
-	// http 처리
+	// 페이로드 시작 위치 계산
 	int tcp_segment_offset = ip_length + tcp_header_length;
 
-	// tcp_segment가 없으면 종료
+	// 페이로드가 있는지 확인
 	if(tcp_segment_offset == ret) return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
 
 
 	// HTTP 메서드인지 확인
 	int i;
-	const unsigned char* HTTP_METHOD = "HTTP";
+	const char* HTTP_METHOD = "HTTP";
+	const char* CRLF = "\r\n";
 	for(i = tcp_segment_offset; i < ret - strlen(HTTP_METHOD); i++) {
 		if(strncmp(&data_[i], HTTP_METHOD, strlen(HTTP_METHOD)) == 0) {
-			//printf("HTTP PASS\n");	
 			break;
 		}
 		// 첫번째 줄에 없으면 끝
-		if(strncmp(&data_[i], "\r\n", strlen("\r\n")) == 0) return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
+		if(strncmp(&data_[i], CRLF, strlen(CRLF)) == 0) return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
 	}
 
 	// "Host: test.gilgil.net\r\n" 확인
+	const char* HOST = "Host: ";
 	char* target_ = (char*)malloc(strlen(target)+9);
 	memset(target_, 0, strlen(target)+9);
-	strncpy(target_, "Host: ", strlen("Host: "));
+	// "Host: " + "주소" + "\r\n"
+	strncpy(target_, HOST, strlen(HOST));
 	strncpy(target_ + strlen(target_), target, strlen(target));
-	strncpy(target_ + strlen(target_), "\r\n", strlen("\r\n"));
-	//printf("%s", target_);
+	strncpy(target_ + strlen(target_), CRLF, strlen(CRLF));
+
 	for(; i < ret-strlen(target_); i++) {
 		if(strncmp(&data_[i], target_, strlen(target_)) == 0) {
 			printf("DROP\n");
 			return nfq_set_verdict(qh, id, NF_DROP, 0, NULL);
 		}
-		// Host: 등장했는데 아니면 끝
-		if(strncmp(&data_[i-1], "Host: ", strlen("Host: ")) == 0) {
-			printf("PASS\n");
+		// "Host: ~~"가 나왔는데 아니면 끝
+		if(strncmp(&data_[i-1], HOST, strlen(HOST)) == 0) {
 			return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
 		}
 	}
