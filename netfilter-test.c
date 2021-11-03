@@ -137,32 +137,29 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 			//printf("HTTP PASS\n");	
 			break;
 		}
+		// 첫번째 줄에 없으면 끝
+		if(strncmp(&data_[i], "\r\n", strlen("\r\n")) == 0) return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
 	}
-	if(i == ret - strlen(HTTP_METHOD)) {
-		//for(int j = tcp_segment_offset ; j < ret; j++) {
-		//	printf("%c", data_[j]);
-		//}
-		return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
-	}
-	char* target_ = (char*)malloc(strlen(target)+2);
-	strncpy(target_, target, strlen(target));
-	char* additional = "\r\n";
-	strncpy(target_ + strlen(target), additional, 2);
+
+	// "Host: test.gilgil.net\r\n" 확인
+	char* target_ = (char*)malloc(strlen(target)+9);
+	memset(target_, 0, strlen(target)+9);
+	strncpy(target_, "Host: ", strlen("Host: "));
+	strncpy(target_ + strlen(target_), target, strlen(target));
+	strncpy(target_ + strlen(target_), "\r\n", strlen("\r\n"));
 	//printf("%s", target_);
 	for(; i < ret-strlen(target_); i++) {
 		if(strncmp(&data_[i], target_, strlen(target_)) == 0) {
 			printf("DROP\n");
 			return nfq_set_verdict(qh, id, NF_DROP, 0, NULL);
 		}
+		// Host: 등장했는데 아니면 끝
+		if(strncmp(&data_[i-1], "Host: ", strlen("Host: ")) == 0) {
+			printf("PASS\n");
+			return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
+		}
 	}
-
-	// host가 argv인지 확인
-	// test.gilgil.net 문자열 확인
-
-
-
 	return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
-	// 테스트 길길 넷이면 NF_DROP
 }
 
 int main(int argc, char **argv)
