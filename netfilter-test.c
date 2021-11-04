@@ -146,13 +146,16 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	for(; i < ret-strlen(target_); i++) {
 		if(strncmp(&data_[i], target_, strlen(target_)) == 0) {
 			printf("DROP\n");
+			free(target_);
 			return nfq_set_verdict(qh, id, NF_DROP, 0, NULL);
 		}
 		// "Host: ~~"가 나왔는데 아니면 끝
 		if(strncmp(&data_[i-1], HOST, strlen(HOST)) == 0) {
+			free(target_);
 			return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
 		}
 	}
+	free(target_);
 	return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
 }
 
